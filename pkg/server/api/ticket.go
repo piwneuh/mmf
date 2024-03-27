@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"mmf/pkg/services"
@@ -20,6 +21,10 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// Map for user connection
+var userConnections = make(map[string]*websocket.Conn)
+var userConnectionsMutex sync.Mutex
+
 func RegisterTicket(router *gin.Engine, ctx context.Context) {
 	tickets := router.Group("/tickets")
 	{
@@ -34,20 +39,30 @@ func RegisterTicket(router *gin.Engine, ctx context.Context) {
 			return
 		}
 		defer conn.Close()
+		userID := c.Query("steamId")
+
+		userConnectionsMutex.Lock()
+		userConnections[userID] = conn
+		userConnectionsMutex.Unlock()
+
+		defer func() {
+			userConnectionsMutex.Lock()
+			delete(userConnections, userID)
+			userConnectionsMutex.Unlock()
+		}()
 
 		for {
-			msg := wires.Instance.TicketService.EvaluateTickets(c)
+			// msg := wires.Instance.TicketService.EvaluateTickets(c)
+			msg := userID
 			if len(msg) == 10 {
-				conn.WriteJSON(msg)
+				conn.WriteJSON(userID)
 				// TODO: Add scheduled task to check if all players are ready and begin the game
 			} else {
-				conn.WriteMessage(websocket.TextMessage, []byte("Waiting for more players to join the game."))
+				conn.WriteMessage(websocket.TextMessage, []byte("Waiting for more players to join the game."+"You are player "+msg))
 			}
 			time.Sleep(1 * time.Second)
-
 		}
 	})
-
 }
 
 func submitTicket(c *gin.Context) {
