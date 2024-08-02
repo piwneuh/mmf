@@ -32,7 +32,8 @@ func ScheduleMatch(url string, requestBody interface{}) (*io.ReadCloser, error) 
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		wholeBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(wholeBody))
 	}
 
 	return &resp.Body, nil
